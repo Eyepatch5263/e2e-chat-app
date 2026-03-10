@@ -5,21 +5,29 @@ import 'providers/auth_provider.dart';
 import 'providers/chat_provider.dart';
 import 'screens/splash_screen.dart';
 import 'screens/username_setup_screen.dart';
-import 'screens/chat_list_screen.dart';
 import 'package:flutter/services.dart';
 
 class UsbService {
   static const MethodChannel _channel = MethodChannel('usb_detection');
 
-  static Future<Map?> getUsbDevices() async {
+  static Future<List<Map<String, dynamic>>?> getUsbDevices() async {
     final result = await _channel.invokeMethod('getUsbDevices');
     return result;
   }
 }
 
 void checkUSB() async {
-  var devices = await UsbService.getUsbDevices();
-  print(devices);
+  List<Map<String, dynamic>>? devices = await UsbService.getUsbDevices();
+
+  if (devices == null || devices.isEmpty) {
+    print("No USB detected");
+    return;
+  }
+
+  for (var device in devices) {
+    print("Vendor: ${device["vendorId"]}");
+    print("Product: ${device["productId"]}");
+  }
 }
 
 /// Root widget – routes to the correct screen based on auth state.
@@ -98,6 +106,9 @@ class _SecureChatAppState extends State<SecureChatApp> {
             case AuthState.needsUsername:
               return const UsernameSetupScreen();
             case AuthState.authenticated:
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                context.read<ChatProvider>().initialize();
+              });
               return const SecurityCheckScreen();
           }
         },

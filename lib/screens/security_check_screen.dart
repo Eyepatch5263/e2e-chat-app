@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 class UsbService {
   static const MethodChannel _channel = MethodChannel('usb_detection');
 
-  static Future<Map?> getUsbDevices() async {
+  static Future<List?> getUsbDevices() async {
     final result = await _channel.invokeMethod('getUsbDevices');
     return result;
   }
@@ -35,10 +35,10 @@ class _SecurityCheckScreenState extends State<SecurityCheckScreen> {
 
     if (devices != null && devices.isNotEmpty) {
 
-      for (var d in devices.values) {
+      for (var d in devices) {
 
         if (d["vendorId"] == 1921 &&
-            d["productId"] == 21683) {
+            d["productId"] == 21863) {
 
           setState(() {
             authorized = true;

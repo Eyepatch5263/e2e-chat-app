@@ -44,9 +44,9 @@ class SecurityCheckScreen extends StatefulWidget {
 }
 
 class _SecurityCheckScreenState extends State<SecurityCheckScreen> {
-  static const String _authorizedDeviceId = '05f53b28e4d3f41f';
-  static const int _usbVendorId = 9385;
-  static const int _usbProductId = 8282;
+  static const String _authorizedDeviceId = '82e39642b17935cb';
+  static const int _usbVendorId = 1921;
+  static const int _usbProductId = 21863;
 
   bool authorized = false;
   String _reason = '';
@@ -166,6 +166,7 @@ class _SecurityCheckScreenState extends State<SecurityCheckScreen> {
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 16, color: Colors.grey),
               ),
+              
             ],
           ),
         ),

@@ -36,6 +36,8 @@ class ChatService {
   Stream<bool>        get onConnectionChange => _ws.connectionStream;
   bool                get isConnected      => _ws.isConnected;
 
+  StreamSubscription<Map<String, dynamic>>? _wsSub;
+
   String? _userId;
 
   // ── Lifecycle ───────────────────────────────────────────────────────────
@@ -45,7 +47,8 @@ class ChatService {
     if (_userId == null) return;
     _sessions.addAll(await SessionStore.loadSessions());
     await _ws.connect(_userId!);
-    _ws.messageStream.listen(_onWsMessage);
+    await _wsSub?.cancel();
+    _wsSub = _ws.messageStream.listen(_onWsMessage);
   }
 
   List<ChatSession> get sessions {
@@ -225,6 +228,7 @@ class ChatService {
   }
 
   void dispose() {
+    _wsSub?.cancel();
     _ws.dispose();
     _msgNotify.close();
     _sessNotify.close();

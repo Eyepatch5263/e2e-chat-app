@@ -1,9 +1,16 @@
+import 'dart:async';
 import 'package:app/screens/chat_list_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
+import '../providers/chat_provider.dart';
+import '../storage/secure_storage.dart';
+import '../storage/session_store.dart';
 
 class UsbService {
   static const MethodChannel _channel = MethodChannel('usb_detection');
+  static const EventChannel _eventChannel = EventChannel('usb_events');
 
   static Future<List?> getUsbDevices() async {
     try {
@@ -22,6 +29,11 @@ class UsbService {
       return null;
     }
   }
+
+  /// Stream of USB attach/detach events.
+  /// Each event is a Map with: action ("attached"/"detached"), vendorId, productId
+  static Stream<Map<dynamic, dynamic>> get usbEventStream =>
+      _eventChannel.receiveBroadcastStream().map((e) => e as Map<dynamic, dynamic>);
 }
 
 class SecurityCheckScreen extends StatefulWidget {
@@ -32,25 +44,72 @@ class SecurityCheckScreen extends StatefulWidget {
 }
 
 class _SecurityCheckScreenState extends State<SecurityCheckScreen> {
-  // ── Set your authorised phone's ANDROID_ID here ──
-  // Leave empty to skip the phone check (USB-only mode).
-  // Run the app once with it empty — the screen will show your device ID.
-  static const String _authorizedDeviceId = '82e39642b17935cb';
+  static const String _authorizedDeviceId = '05f53b28e4d3f41f';
+  static const int _usbVendorId = 9385;
+  static const int _usbProductId = 8282;
 
   bool authorized = false;
   String _reason = '';
+  bool _resetting = false;
+
+  StreamSubscription? _usbSub;
 
   @override
   void initState() {
     super.initState();
     verifyDevice();
+    _listenUsbEvents();
+  }
+
+  @override
+  void dispose() {
+    _usbSub?.cancel();
+    super.dispose();
+  }
+
+  void _listenUsbEvents() {
+    _usbSub = UsbService.usbEventStream.listen((event) {
+      final action = event['action'] as String?;
+      final vendorId = event['vendorId'] as int?;
+      final productId = event['productId'] as int?;
+
+      if (action == 'detached' &&
+          vendorId == _usbVendorId &&
+          productId == _usbProductId) {
+        // Authorized USB was removed — wipe account
+        _resetAccount();
+      } else if (action == 'attached' &&
+          vendorId == _usbVendorId &&
+          productId == _usbProductId) {
+        // USB re-inserted — re-verify
+        verifyDevice();
+      }
+    });
+  }
+
+  Future<void> _resetAccount() async {
+    if (_resetting) return;
+    _resetting = true;
+
+    // 1. Disconnect WebSocket and wipe in-memory sessions/messages
+    context.read<ChatProvider>().reset();
+
+    // 2. Wipe all persistent keys, sessions, and messages
+    await SecureStorage.clearAll();
+    await SessionStore.clearAll();
+
+    if (mounted) {
+      // 3. Pop all routes back to root so ChatScreen can't stay open
+      Navigator.of(context).popUntil((route) => route.isFirst);
+
+      // 4. Reset auth state — triggers rebuild to splash/setup
+      await context.read<AuthProvider>().initialize();
+    }
   }
 
   Future<void> verifyDevice() async {
-    // 1. Get device ID
     final deviceId = await UsbService.getDeviceId();
 
-    // 2. If a device ID is configured, check it first
     if (_authorizedDeviceId.isNotEmpty) {
       if (deviceId == null || deviceId != _authorizedDeviceId) {
         setState(() {
@@ -61,12 +120,11 @@ class _SecurityCheckScreenState extends State<SecurityCheckScreen> {
       }
     }
 
-    // 3. Check USB
     final devices = await UsbService.getUsbDevices();
 
     if (devices != null && devices.isNotEmpty) {
       for (var d in devices) {
-        if (d["vendorId"] == 1921 && d["productId"] == 21863) {
+        if (d["vendorId"] == _usbVendorId && d["productId"] == _usbProductId) {
           setState(() {
             authorized = true;
           });
@@ -108,35 +166,6 @@ class _SecurityCheckScreenState extends State<SecurityCheckScreen> {
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 16, color: Colors.grey),
               ),
-              // Show device ID so you can copy it for configuration
-              // if (_deviceId != null) ...[
-              //   const SizedBox(height: 32),
-              //   const Divider(),
-              //   const SizedBox(height: 8),
-              //   const Text('Your Device ID:',
-              //       style: TextStyle(fontSize: 12, color: Colors.grey)),
-              //   const SizedBox(height: 4),
-              //   SelectableText(
-              //     _deviceId!,
-              //     style: const TextStyle(
-              //       fontSize: 14,
-              //       fontFamily: 'monospace',
-              //       fontWeight: FontWeight.bold,
-              //     ),
-              //   ),
-              //   const SizedBox(height: 8),
-              //   // Text(
-              //   //   'Copy this ID and set it as\n_authorizedDeviceId in security_check_screen.dart',
-              //   //   textAlign: TextAlign.center,
-              //   //   style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-              //   // ),
-              // ],
-              // const SizedBox(height: 32),
-              // ElevatedButton.icon(
-              //   onPressed: verifyDevice,
-              //   icon: const Icon(Icons.refresh),
-              //   label: const Text('Retry'),
-              // ),
             ],
           ),
         ),

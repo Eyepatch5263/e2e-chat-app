@@ -56,6 +56,19 @@ class ChatProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Wipe all in-memory chat state, disconnect WebSocket, cancel listeners.
+  void reset() {
+    _msgSub?.cancel();
+    _sessSub?.cancel();
+    _connSub?.cancel();
+    _msgSub = null;
+    _sessSub = null;
+    _connSub = null;
+    _svc.reset();
+    _connected = false;
+    notifyListeners();
+  }
+
   @override
   void dispose() {
     _msgSub?.cancel();

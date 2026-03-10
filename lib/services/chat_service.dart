@@ -23,19 +23,20 @@ import 'crypto_service.dart';
 
 class ChatService {
   final WebSocketService _ws = WebSocketService();
-  final Map<String, ChatSession>       _sessions = {};
+  final Map<String, ChatSession> _sessions = {};
   final Map<String, List<ChatMessage>> _messages = {};
-  final Map<String, String>            _pendingEK = {}; // ephemeral keys
+  final Map<String, String> _pendingEK = {}; // ephemeral keys
 
-  final _msgNotify  = StreamController<ChatMessage>.broadcast();
+  final _msgNotify = StreamController<ChatMessage>.broadcast();
   final _sessNotify = StreamController<ChatSession>.broadcast();
 
-  Stream<ChatMessage> get onMessage        => _msgNotify.stream;
-  Stream<ChatSession> get onSessionUpdate  => _sessNotify.stream;
-  Stream<bool>        get onConnectionChange => _ws.connectionStream;
-  bool                get isConnected      => _ws.isConnected;
+  Stream<ChatMessage> get onMessage => _msgNotify.stream;
+  Stream<ChatSession> get onSessionUpdate => _sessNotify.stream;
+  Stream<bool> get onConnectionChange => _ws.connectionStream;
+  bool get isConnected => _ws.isConnected;
 
   String? _userId;
+  StreamSubscription<Map<String, dynamic>>? _wsSub;
 
   // ── Lifecycle ───────────────────────────────────────────────────────────
 
@@ -44,7 +45,8 @@ class ChatService {
     if (_userId == null) return;
     _sessions.addAll(await SessionStore.loadSessions());
     await _ws.connect(_userId!);
-    _ws.messageStream.listen(_onWsMessage);
+    await _wsSub?.cancel();
+    _wsSub = _ws.messageStream.listen(_onWsMessage);
   }
 
   List<ChatSession> get sessions {
@@ -95,9 +97,9 @@ class ChatService {
     if (session == null || _userId == null) return null;
 
     final enc = await CryptoService.encryptMessage(
-      plaintext:   plaintext,
-      chainKey:    session.chainKey,
-      senderId:    _userId!,
+      plaintext: plaintext,
+      chainKey: session.chainKey,
+      senderId: _userId!,
       recipientId: peerId,
     );
 
@@ -105,7 +107,7 @@ class ChatService {
     session.chainKey = enc.nextChainKey;
     session.sendCounter++;
     session.lastActivity = DateTime.now();
-    session.lastMessage  = plaintext;
+    session.lastMessage = plaintext;
     await SessionStore.saveSession(session);
 
     final expiresAt = selfDestructDuration != null
@@ -113,26 +115,26 @@ class ChatService {
         : null;
 
     final msg = ChatMessage(
-      id:             DateTime.now().millisecondsSinceEpoch.toString(),
-      senderId:       _userId!,
-      recipientId:    peerId,
-      content:        plaintext,
-      ciphertext:     enc.ciphertext,
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      senderId: _userId!,
+      recipientId: peerId,
+      content: plaintext,
+      ciphertext: enc.ciphertext,
       ratchetCounter: session.sendCounter,
-      timestamp:      DateTime.now(),
-      expiresAt:      expiresAt,
-      status:         MessageStatus.sending,
+      timestamp: DateTime.now(),
+      expiresAt: expiresAt,
+      status: MessageStatus.sending,
     );
 
     _messages.putIfAbsent(peerId, () => []);
     _messages[peerId]!.add(msg);
 
     _ws.sendMessage(
-      recipientId:    peerId,
-      ciphertext:     enc.ciphertext,
+      recipientId: peerId,
+      ciphertext: enc.ciphertext,
       ratchetCounter: session.sendCounter,
-      ephemeralKey:   _pendingEK.remove(peerId),
-      expiresAt:      expiresAt,
+      ephemeralKey: _pendingEK.remove(peerId),
+      expiresAt: expiresAt,
     );
 
     msg.status = MessageStatus.sent;
@@ -154,10 +156,10 @@ class ChatService {
 
   Future<void> _handleChat(Map<String, dynamic> data) async {
     final senderId = data['sender_id'] as String;
-    final ct       = data['ciphertext'] as String;
-    final counter  = (data['ratchet_counter'] ?? 0) as int;
-    final ek       = data['ephemeral_key'] as String?;
-    final expStr   = data['expires_at'] as String?;
+    final ct = data['ciphertext'] as String;
+    final counter = (data['ratchet_counter'] ?? 0) as int;
+    final ek = data['ephemeral_key'] as String?;
+    final expStr = data['expires_at'] as String?;
 
     // If no session exists, perform responder-side X3DH.
     if (!_sessions.containsKey(senderId)) {
@@ -167,13 +169,13 @@ class ChatService {
 
       final chainKey = await CryptoService.respondToHandshake(
         peerIdentityDhPublicB64: bundle.identityDhPublicKey,
-        peerEphemeralPublicB64:  ek,
+        peerEphemeralPublicB64: ek,
       );
 
       _sessions[senderId] = ChatSession(
-        peerId:       senderId,
-        peerUsername:  bundle.identityPublicKey.substring(0, 8),
-        chainKey:     chainKey,
+        peerId: senderId,
+        peerUsername: bundle.identityPublicKey.substring(0, 8),
+        chainKey: chainKey,
       );
       await SessionStore.saveSession(_sessions[senderId]!);
     }
@@ -182,27 +184,27 @@ class ChatService {
 
     try {
       final dec = await CryptoService.decryptMessage(
-        ciphertext:  ct,
-        chainKey:    session.chainKey,
-        senderId:    senderId,
+        ciphertext: ct,
+        chainKey: session.chainKey,
+        senderId: senderId,
         recipientId: _userId!,
       );
 
       session.chainKey = dec.nextChainKey;
       session.receiveCounter++;
       session.lastActivity = DateTime.now();
-      session.lastMessage  = dec.plaintext;
+      session.lastMessage = dec.plaintext;
       await SessionStore.saveSession(session);
 
       final msg = ChatMessage(
-        id:             DateTime.now().millisecondsSinceEpoch.toString(),
-        senderId:       senderId,
-        recipientId:    _userId!,
-        content:        dec.plaintext,
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        senderId: senderId,
+        recipientId: _userId!,
+        content: dec.plaintext,
         ratchetCounter: counter,
-        timestamp:      DateTime.now(),
-        expiresAt:      expStr != null ? DateTime.parse(expStr) : null,
-        status:         MessageStatus.delivered,
+        timestamp: DateTime.now(),
+        expiresAt: expStr != null ? DateTime.parse(expStr) : null,
+        status: MessageStatus.delivered,
       );
 
       _messages.putIfAbsent(senderId, () => []);
@@ -221,6 +223,16 @@ class ChatService {
 
   void _purgeExpired(String peerId) {
     _messages[peerId]?.removeWhere((m) => m.isExpired);
+  }
+
+  /// Wipe all in-memory state and disconnect. Used on account reset.
+  void reset() {
+    _wsSub?.cancel();
+    _ws.disconnect();
+    _sessions.clear();
+    _messages.clear();
+    _pendingEK.clear();
+    _userId = null;
   }
 
   void dispose() {

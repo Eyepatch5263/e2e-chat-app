@@ -21,7 +21,7 @@ A production-grade **end-to-end encrypted (E2EE)** chat application built with *
 
 ## Architecture
 
-`
+```
 Flutter UI (Material 3)
     │
 Provider (AuthProvider, ChatProvider)
@@ -35,7 +35,7 @@ Crypto Layer             Storage Layer
     │                         │
 Ed25519, X25519,         Android Keystore /
 XChaCha20-Poly1305       iOS Keychain
-`
+```
 
 ---
 
@@ -56,33 +56,33 @@ XChaCha20-Poly1305       iOS Keychain
 
 Initiator (Alice) → Responder (Bob):
 
-1. Fetch Bob's key bundle from server (identity keys + signed prekey + signature)
+1. Fetch Bob’s key bundle from server (identity keys + signed prekey + signature)
 2. Verify prekey signature (Ed25519)
 3. Generate ephemeral keypair `EK_A`
 4. Compute three X25519 DH shared secrets:
-   `
-   DH1 = X25519(IK_A_dh_priv, SPK_B)       // identity ↔ prekey
-   DH2 = X25519(EK_A_priv,    IK_B_dh)     // ephemeral ↔ identity
-   DH3 = X25519(EK_A_priv,    SPK_B)       // ephemeral ↔ prekey
-   `
+   ```
+   DH1 = X25519(IK_A_dh_priv, SPK_B)       // identity <-> prekey
+   DH2 = X25519(EK_A_priv,    IK_B_dh)     // ephemeral <-> identity
+   DH3 = X25519(EK_A_priv,    SPK_B)       // ephemeral <-> prekey
+   ```
 5. Derive 32-byte session key:
-   `
-   session_key = HKDF-SHA256(DH1 ‖ DH2 ‖ DH3, nonce='e2ee_x3dh_v1')
-   `
+   ```
+   session_key = HKDF-SHA256(DH1 || DH2 || DH3, nonce='e2ee_x3dh_v1')
+   ```
 6. Delete ephemeral private key immediately
 
 ### Chain-Key Ratchet (Forward Secrecy)
 
-`
+```
 chain_key_0 = HMAC-SHA256(session_key, "chain_init")
 
 For each message N:
   message_key_N   = HMAC-SHA256(chain_key_N, "msg_key")
   chain_key_(N+1) = HMAC-SHA256(chain_key_N, "chain_advance")
 
-  → chain_key_N is deleted (replaced by N+1)
-  → message_key_N is used once then discarded
-`
+  -> chain_key_N is deleted (replaced by N+1)
+  -> message_key_N is used once then discarded
+```
 
 ### Message Encryption (AEAD)
 
@@ -91,13 +91,13 @@ For each message N:
 | Cipher | XChaCha20-Poly1305 |
 | Nonce | 24 random bytes per message |
 | AAD | `senderId:recipientId` (prevents re-routing) |
-| Wire format | `base64(nonce ‖ ciphertext ‖ MAC)` |
+| Wire format | `base64(nonce + ciphertext + MAC)` |
 
 ---
 
 ## Project Structure
 
-`
+```
 lib/
 ├── main.dart                    # Entry point, MultiProvider setup
 ├── app.dart                     # Root widget, routing, Material 3 theme
@@ -139,7 +139,7 @@ lib/
 
 android/app/src/main/kotlin/com/pratyush/securechat/
 └── MainActivity.kt              # USB detection, device ID, FLAG_SECURE
-`
+```
 
 ---
 
@@ -187,13 +187,13 @@ The relay server is a **zero-knowledge** Node.js + Express + WebSocket service.
 
 ### WebSocket (`/connect`)
 
-`json
+```json
 // Authentication
-→ { "type": "auth", "user_id": "..." }
-← { "type": "welcome" }
+{ "type": "auth", "user_id": "..." }
+{ "type": "welcome" }
 
 // Encrypted message relay
-→ {
+{
     "type": "chat_message",
     "recipient_id": "...",
     "ciphertext": "base64(...)",
@@ -201,11 +201,11 @@ The relay server is a **zero-knowledge** Node.js + Express + WebSocket service.
     "ephemeral_key": "base64(...)",
     "timestamp": "...",
     "expires_at": "... | null"
-  }
+}
 
 // Delivery acknowledgment
-← { "type": "delivery_ack", "message_id": "..." }
-`
+{ "type": "delivery_ack", "message_id": "..." }
+```
 
 ---
 
@@ -219,31 +219,31 @@ The relay server is a **zero-knowledge** Node.js + Express + WebSocket service.
 
 ### Install Dependencies
 
-`ash
+```bash
 flutter pub get
-`
+```
 
 ### Run (Development)
 
-`ash
+```bash
 flutter run
-`
+```
 
 By default connects to `http://10.0.2.2:3000` (Android emulator loopback to host).
 
 ### Build Release APK
 
-`ash
+```bash
 flutter build apk --release --dart-define=SERVER_URL=https://your-relay-server.com
-`
+```
 
 ### Configure Server URL
 
 Set at compile time via `--dart-define`:
 
-`ash
+```bash
 flutter run --dart-define=SERVER_URL=https://your-relay-server.com
-`
+```
 
 ---
 

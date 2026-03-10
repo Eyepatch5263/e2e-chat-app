@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/chat_provider.dart';
 import 'app.dart';
-import 'package:flutter/services.dart';
 
 
 /// Entry point.

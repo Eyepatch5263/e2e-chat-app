@@ -5,7 +5,6 @@ import '../network/api.dart';
 import '../network/websocket_service.dart';
 import '../storage/secure_storage.dart';
 import '../storage/session_store.dart';
-import '../config.dart';
 import 'crypto_service.dart';
 
 // ---------------------------------------------------------------------------
@@ -90,7 +89,7 @@ class ChatService {
   Future<ChatMessage?> sendMessage({
     required String peerId,
     required String plaintext,
-    bool selfDestruct = false,
+    Duration? selfDestructDuration,
   }) async {
     final session = _sessions[peerId];
     if (session == null || _userId == null) return null;
@@ -109,8 +108,8 @@ class ChatService {
     session.lastMessage  = plaintext;
     await SessionStore.saveSession(session);
 
-    final expiresAt = selfDestruct
-        ? DateTime.now().add(AppConfig.defaultMessageExpiry)
+    final expiresAt = selfDestructDuration != null
+        ? DateTime.now().add(selfDestructDuration)
         : null;
 
     final msg = ChatMessage(

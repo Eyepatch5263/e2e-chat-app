@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-/// Chat input bar with self-destruct toggle and send button.
+/// Chat input bar with self-destruct duration picker and send button.
 class ChatInput extends StatefulWidget {
-  final void Function(String text, bool selfDestruct) onSend;
+  final void Function(String text, Duration? selfDestructDuration) onSend;
 
   const ChatInput({super.key, required this.onSend});
 
@@ -12,13 +12,29 @@ class ChatInput extends StatefulWidget {
 
 class _ChatInputState extends State<ChatInput> {
   final _ctrl = TextEditingController();
-  bool _selfDestruct = false;
+
+  // null = off, otherwise the selected duration
+  static const List<_TimerOption> _options = [
+    _TimerOption(null, 'Off'),
+    _TimerOption(Duration(seconds: 15), '15s'),
+    _TimerOption(Duration(seconds: 30), '30s'),
+    _TimerOption(Duration(minutes: 1), '1m'),
+  ];
+
+  int _selectedIndex = 0;
+  Duration? get _selfDestructDuration => _options[_selectedIndex].duration;
 
   void _send() {
     final text = _ctrl.text.trim();
     if (text.isEmpty) return;
-    widget.onSend(text, _selfDestruct);
+    widget.onSend(text, _selfDestructDuration);
     _ctrl.clear();
+  }
+
+  void _cycleTimer() {
+    setState(() {
+      _selectedIndex = (_selectedIndex + 1) % _options.length;
+    });
   }
 
   @override
@@ -30,6 +46,8 @@ class _ChatInputState extends State<ChatInput> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final active = _selfDestructDuration != null;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       decoration: BoxDecoration(
@@ -44,17 +62,41 @@ class _ChatInputState extends State<ChatInput> {
       ),
       child: SafeArea(
         child: Row(children: [
-          // Self-destruct toggle
-          IconButton(
-            icon: Icon(
-              _selfDestruct ? Icons.timer : Icons.timer_outlined,
-              color: _selfDestruct ? cs.error : Colors.grey,
+          // Self-destruct timer picker — tap to cycle through options
+          GestureDetector(
+            onTap: _cycleTimer,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              decoration: BoxDecoration(
+                color: active
+                    ? cs.error.withValues(alpha: 0.1)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    active ? Icons.timer : Icons.timer_outlined,
+                    size: 20,
+                    color: active ? cs.error : Colors.grey,
+                  ),
+                  if (active) ...[
+                    const SizedBox(width: 4),
+                    Text(
+                      _options[_selectedIndex].label,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: cs.error,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
-            tooltip: _selfDestruct
-                ? 'Self-destruct ON'
-                : 'Enable self-destruct',
-            onPressed: () => setState(() => _selfDestruct = !_selfDestruct),
           ),
+          const SizedBox(width: 4),
           // Text field
           Expanded(
             child: TextField(
@@ -63,8 +105,8 @@ class _ChatInputState extends State<ChatInput> {
               maxLines: 4,
               minLines: 1,
               decoration: InputDecoration(
-                hintText: _selfDestruct
-                    ? 'Self-destruct message\u2026'
+                hintText: active
+                    ? 'Disappears in ${_options[_selectedIndex].label}\u2026'
                     : 'Encrypted message\u2026',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(24),
@@ -92,4 +134,10 @@ class _ChatInputState extends State<ChatInput> {
       ),
     );
   }
+}
+
+class _TimerOption {
+  final Duration? duration;
+  final String label;
+  const _TimerOption(this.duration, this.label);
 }

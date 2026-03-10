@@ -46,12 +46,12 @@ class ChatProvider extends ChangeNotifier {
   Future<void> sendMessage({
     required String peerId,
     required String plaintext,
-    bool selfDestruct = false,
+    Duration? selfDestructDuration,
   }) async {
     await _svc.sendMessage(
-      peerId:       peerId,
-      plaintext:    plaintext,
-      selfDestruct: selfDestruct,
+      peerId:                peerId,
+      plaintext:             plaintext,
+      selfDestructDuration:  selfDestructDuration,
     );
     notifyListeners();
   }

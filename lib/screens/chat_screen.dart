@@ -121,11 +121,11 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
         // Input bar
         ChatInput(
-          onSend: (text, selfDestruct) {
+          onSend: (text, selfDestructDuration) {
             context.read<ChatProvider>().sendMessage(
                   peerId: widget.peerId,
                   plaintext: text,
-                  selfDestruct: selfDestruct,
+                  selfDestructDuration: selfDestructDuration,
                 );
           },
         ),
